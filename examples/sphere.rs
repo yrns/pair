@@ -12,14 +12,17 @@ use bevy::{
         texture::ImageSampler,
     },
 };
+use bevy_egui::{egui, EguiContexts, EguiPlugin};
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
+        .add_plugin(EguiPlugin)
         .add_startup_system(setup)
         .add_system(track_cursor)
         //.add_system(track_motion)
         .add_system(update_dynamics.after(track_cursor))
+        .add_system(dynamics_window)
         .run();
 }
 
@@ -30,8 +33,25 @@ struct Tracking {
     velocity: Vec3,
 }
 
+/// Remember the parameters so we can update them in real time.
 #[derive(Component)]
-struct Dynamic(pair::SecondOrderDynamics<Vec3>);
+struct Dynamic {
+    f: f32,
+    z: f32,
+    r: f32,
+    state: pair::SecondOrderDynamics<Vec3>,
+}
+
+impl Dynamic {
+    pub fn new(f: f32, z: f32, r: f32) -> Self {
+        Self {
+            f,
+            z,
+            r,
+            state: pair::SecondOrderDynamics::new(f, z, r, TRACKING_POS),
+        }
+    }
+}
 
 // Offset the two objects so we can see the difference in motion.
 const TRACKING_POS: Vec3 = vec3(-3.0, 3.0, 0.0);
@@ -99,13 +119,8 @@ fn setup(
             transform: Transform::from_translation(DYNAMIC_POS),
             ..default()
         })
-        .insert(Dynamic(pair::SecondOrderDynamics::new(
-            2.5,
-            1.0,
-            1.0,
-            // The dynamics are tracking the tracker internally. The offset is added post-update.
-            TRACKING_POS,
-        )));
+        // The dynamics are tracking the tracker internally. The offset is added post-update.
+        .insert(Dynamic::new(2.5, 1.0, 1.0));
 
     // light
     commands.spawn(DirectionalLightBundle {
@@ -216,8 +231,10 @@ fn update_dynamics(
     // In this example there is only one.
     if let Some(Tracking { target, velocity }) = tracking.iter().next() {
         for (mut t, mut d) in dynamic.iter_mut() {
-            t.translation =
-                d.0.update(time.delta_seconds(), *target, Some(*velocity)) + DYNAMIC_OFFSET;
+            t.translation = d
+                .state
+                .update(time.delta_seconds(), *target, Some(*velocity))
+                + DYNAMIC_OFFSET;
         }
     }
 }
@@ -271,4 +288,19 @@ fn scale_uvs(mut mesh: Mesh, scale: f32) -> Mesh {
         _ => (),
     }
     mesh
+}
+
+fn dynamics_window(mut contexts: EguiContexts, mut dynamics: Query<(Entity, &mut Dynamic)>) {
+    for (entity, mut dynamic) in dynamics.iter_mut() {
+        egui::Window::new(format!("dynamic {:?}", entity)).show(contexts.ctx_mut(), |ui| {
+            let response = ui
+                .add(egui::Slider::new(&mut dynamic.f, 0.0..=10.0).text("f (frequency)"))
+                | ui.add(egui::Slider::new(&mut dynamic.z, 0.0..=10.0).text("ζ (damping)"))
+                | ui.add(egui::Slider::new(&mut dynamic.r, -10.0..=10.0).text("r (response)"));
+
+            if response.changed() {
+                *dynamic = Dynamic::new(dynamic.f, dynamic.z, dynamic.r);
+            }
+        });
+    }
 }
