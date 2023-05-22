@@ -17,8 +17,9 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_startup_system(setup)
-        .add_system(track_mouse)
-        .add_system(update_dynamics.after(track_mouse))
+        .add_system(track_cursor)
+        //.add_system(track_motion)
+        .add_system(update_dynamics.after(track_cursor))
         .run();
 }
 
@@ -131,7 +132,8 @@ fn setup(
 }
 
 /// Tracks mouse motion and updates the tracking object.
-fn track_mouse(
+#[allow(unused)]
+fn track_motion(
     time: Res<Time>,
     mut mouse_events: EventReader<MouseMotion>,
     mouse_button_input: Res<Input<MouseButton>>,
@@ -157,6 +159,50 @@ fn track_mouse(
             t.translation = target;
         }
     };
+}
+
+/// Moves to the tracking object to the cursor.
+fn track_cursor(
+    time: Res<Time>,
+    mut cursor_moved: EventReader<CursorMoved>,
+    cameras: Query<(&Camera, &GlobalTransform)>,
+    mut query: Query<(&mut Transform, &mut Tracking)>,
+) {
+    if let Some(c) = cursor_moved.iter().last() {
+        for (camera, transform) in cameras.iter() {
+            if let Some(p) = camera.viewport_to_world_2d(transform, c.position) {
+                let ray = Ray {
+                    origin: p.extend(transform.translation().z),
+                    direction: transform.forward(),
+                };
+
+                if let Some(p) = intersect_tracking_plane(&ray) {
+                    for (mut t, mut tracking) in query.iter_mut() {
+                        let dt = time.delta_seconds();
+                        tracking.velocity = if dt > 0.0 {
+                            (p - tracking.target) / dt
+                        } else {
+                            Vec3::ZERO
+                        };
+                        tracking.target = p;
+                        t.translation = p;
+                    }
+                }
+
+                break;
+            }
+        }
+    }
+}
+
+fn intersect_tracking_plane(ray: &Ray) -> Option<Vec3> {
+    let dotn = Vec3::Y.dot(ray.direction);
+    if dotn == 0.0 {
+        None
+    } else {
+        let t = -((Vec3::Y.dot(ray.origin) - TRACKING_POS.y) / dotn);
+        Some(ray.origin + ray.direction * t)
+    }
 }
 
 /// Update dynamics object based on the tracking object's position and velocity.
