@@ -1,0 +1,11 @@
+* pair
+
+Add second-order motion to any continuous value, useful for procedural animation of dynamic systems. Or interpolation without fixed start and end points.
+
+Full credit for this belongs to [[https://www.twitter.com/t3ssel8r][t3ssel8r]] and this [[https://www.youtube.com/watch?v=KPoeNZZ6H4s][video on youtube]] (watch it!) explaining this is great detail. I only ported the code to Rust and made a simple example using Bevy (~cargo run --release --example sphere~).
+
+The parameters are:
+
+- f - Frequency in cycles per second. The speed at which the system will respond to changes in the input, and rate of vibration.
+- ζ (zeta) - Damping coefficient. Controls how fast the system settles. 0 is no dampening. Less than 1, vibration is damped. Greater than 1, no vibration.
+- r - Initial response. Lower values makes the system slower to react. Above 1, the response overshoots the target. Negative values anticipate motion.
