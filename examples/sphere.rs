@@ -142,7 +142,7 @@ fn track_motion(
     let dt = time.delta_seconds();
     let delta = if mouse_button_input.pressed(MouseButton::Left) {
         let d: Vec2 = mouse_events.iter().map(|m| m.delta).sum();
-        let d = d * Vec2::new(1.0, 1.8) * dt;
+        let d = d * Vec2::new(1.1, 2.0) * 0.018;
         Some(vec3(d.x, 0.0, d.y))
     } else if mouse_button_input.just_released(MouseButton::Left) {
         Some(Vec3::ZERO)
@@ -162,6 +162,7 @@ fn track_motion(
 }
 
 /// Moves the tracking object to the cursor location.
+#[allow(unused)]
 fn track_cursor(
     time: Res<Time>,
     mut cursor_moved: EventReader<CursorMoved>,
@@ -195,6 +196,7 @@ fn track_cursor(
     }
 }
 
+#[allow(unused)]
 fn intersect_tracking_plane(ray: &Ray) -> Option<Vec3> {
     let dotn = Vec3::Y.dot(ray.direction);
     if dotn == 0.0 {
