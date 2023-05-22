@@ -31,7 +31,7 @@ struct Tracking {
 }
 
 #[derive(Component)]
-struct Dynamic(pair::SecondOrderDynamics);
+struct Dynamic(pair::SecondOrderDynamics<Vec3>);
 
 // Offset the two objects so we can see the difference in motion.
 const TRACKING_POS: Vec3 = vec3(-3.0, 3.0, 0.0);
@@ -100,9 +100,9 @@ fn setup(
             ..default()
         })
         .insert(Dynamic(pair::SecondOrderDynamics::new(
-            9.5,
-            0.9,
-            10.0,
+            2.5,
+            1.0,
+            1.0,
             // The dynamics are tracking the tracker internally. The offset is added post-update.
             TRACKING_POS,
         )));

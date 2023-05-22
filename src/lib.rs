@@ -1,14 +1,13 @@
 use std::f32::consts::{PI, TAU};
-
-use bevy::prelude::Vec3;
+use std::ops::*;
 
 #[derive(Debug, Default)]
-pub struct SecondOrderDynamics {
+pub struct SecondOrderDynamics<T> {
     // Previous input.
-    xp: Vec3,
+    xp: T,
     // State variables.
-    y: Vec3,
-    yd: Vec3,
+    y: T,
+    yd: T,
     // Computed constants.
     w: f32,
     z: f32,
@@ -18,8 +17,17 @@ pub struct SecondOrderDynamics {
     k3: f32,
 }
 
-impl SecondOrderDynamics {
-    pub fn new(f: f32, z: f32, r: f32, x0: Vec3) -> Self {
+impl<T> SecondOrderDynamics<T>
+where
+    T: Default
+        + Sub<T, Output = T>
+        + Div<f32, Output = T>
+        + Mul<f32, Output = T>
+        + Add<T, Output = T>
+        + AddAssign<T>
+        + Copy,
+{
+    pub fn new(f: f32, z: f32, r: f32, x0: T) -> Self {
         let w = TAU * f;
         let d = w * (z * z - 1.0).abs().sqrt();
 
@@ -32,11 +40,11 @@ impl SecondOrderDynamics {
             k3: r * z / w,
             xp: x0,
             y: x0,
-            yd: Vec3::ZERO,
+            yd: T::default(),
         }
     }
 
-    pub fn update(&mut self, t: f32, x: Vec3, xd: Option<Vec3>) -> Vec3 {
+    pub fn update(&mut self, t: f32, x: T, xd: Option<T>) -> T {
         // estimate velocity
         let xd = xd.unwrap_or_else(|| {
             assert!(t != 0.0);
@@ -70,10 +78,10 @@ impl SecondOrderDynamics {
         };
 
         // integrate position by velocity
-        self.y = self.y + t * self.yd;
+        self.y = self.y + self.yd * t;
 
         // integrate velocity by acceleration
-        self.yd += t * (x + self.k3 * xd - self.y - k1 * self.yd) / k2;
+        self.yd += (x + xd * self.k3 - self.y - self.yd * k1) * t / k2;
 
         self.y
     }
@@ -82,13 +90,14 @@ impl SecondOrderDynamics {
 #[cfg(test)]
 mod tests {
     use super::SecondOrderDynamics;
-    use bevy::prelude::Vec3;
 
     #[test]
     fn it_works() {
-        let mut dynamics = SecondOrderDynamics::new(1.0, 1.0, 1.0, Vec3::ZERO);
-        let _ = dynamics.update(0.01, Vec3::X, Some(Vec3::X));
-        let t = dynamics.update(0.01, Vec3::X, Some(Vec3::X));
-        assert_ne!(t, Vec3::ZERO);
+        let mut dynamics = SecondOrderDynamics::new(2.0, 1.0, 2.0, 0.0);
+        let mut y = 0.0;
+        for _ in 0..100 {
+            y = dynamics.update(0.01, 1.0, Some(0.01));
+        }
+        assert!(y >= 1.0);
     }
 }
