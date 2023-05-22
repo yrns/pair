@@ -1,4 +1,4 @@
-use std::f32::consts::{FRAC_2_PI, PI};
+use std::f32::consts::{PI, TAU};
 
 use bevy::prelude::Vec3;
 
@@ -20,7 +20,7 @@ pub struct SecondOrderDynamics {
 
 impl SecondOrderDynamics {
     pub fn new(f: f32, z: f32, r: f32, x0: Vec3) -> Self {
-        let w = FRAC_2_PI * f;
+        let w = TAU * f;
         let d = w * (z * z - 1.0).abs().sqrt();
 
         Self {
@@ -73,7 +73,7 @@ impl SecondOrderDynamics {
         self.y = self.y + t * self.yd;
 
         // integrate velocity by acceleration
-        self.yd = self.yd + t * (x + self.k3 * xd - self.y - k1 * self.yd) / k2;
+        self.yd += t * (x + self.k3 * xd - self.y - k1 * self.yd) / k2;
 
         self.y
     }

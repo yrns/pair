@@ -34,9 +34,9 @@ struct Tracking {
 struct Dynamic(pair::SecondOrderDynamics);
 
 // Offset the two objects so we can see the difference in motion.
-const TRACKING_POS: Vec3 = vec3(-4.0, 3.0, 0.0);
-const DYNAMIC_POS: Vec3 = vec3(4.0, 3.0, 0.0);
-const DYNAMIC_OFFSET: Vec3 = vec3(8.0, 0.0, 0.0);
+const TRACKING_POS: Vec3 = vec3(-3.0, 3.0, 0.0);
+const DYNAMIC_POS: Vec3 = vec3(3.0, 3.0, 0.0);
+const DYNAMIC_OFFSET: Vec3 = vec3(6.0, 0.0, 0.0);
 
 fn setup(
     mut commands: Commands,
@@ -161,7 +161,7 @@ fn track_motion(
     };
 }
 
-/// Moves to the tracking object to the cursor.
+/// Moves the tracking object to the cursor location.
 fn track_cursor(
     time: Res<Time>,
     mut cursor_moved: EventReader<CursorMoved>,
