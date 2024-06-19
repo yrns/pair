@@ -24,7 +24,6 @@ fn main() {
 /// A marker component for the tracking object.
 #[derive(Component, Default)]
 struct Tracking {
-    target: Vec3,
     velocity: Vec3,
 }
 
@@ -87,10 +86,7 @@ fn setup(
             transform: Transform::from_translation(TRACKING_POS),
             ..default()
         })
-        .insert(Tracking {
-            target: TRACKING_POS,
-            ..default()
-        });
+        .insert(Tracking::default());
 
     // dynamics object
     commands
@@ -151,7 +147,6 @@ fn track_motion(
         for (mut t, mut tracking) in query.iter_mut() {
             // Save target/velocity.
             let target = t.translation + d;
-            tracking.target = target;
             tracking.velocity = if dt > 0.0 { d / dt } else { Vec3::ZERO };
             t.translation = target;
         }
@@ -178,11 +173,10 @@ fn track_cursor(
                     for (mut t, mut tracking) in query.iter_mut() {
                         let dt = time.delta_seconds();
                         tracking.velocity = if dt > 0.0 {
-                            (p - tracking.target) / dt
+                            (p - t.translation) / dt
                         } else {
                             Vec3::ZERO
                         };
-                        tracking.target = p;
                         t.translation = p;
                     }
                 }
@@ -207,16 +201,17 @@ fn intersect_tracking_plane(ray: &Ray3d) -> Option<Vec3> {
 /// Update dynamics object based on the tracking object's position and velocity.
 fn update_dynamics(
     time: Res<Time>,
-    tracking: Query<&Tracking>,
-    mut dynamic: Query<(&mut Transform, &mut Dynamic)>,
+    tracking: Query<(&Transform, &Tracking)>,
+    mut dynamic: Query<(&mut Transform, &mut Dynamic), Without<Tracking>>,
 ) {
     // In this example there is only one.
-    if let Some(Tracking { target, velocity }) = tracking.iter().next() {
+    if let Some((tracking_t, Tracking { velocity })) = tracking.iter().next() {
         for (mut t, mut d) in dynamic.iter_mut() {
-            t.translation = d
-                .state
-                .update(time.delta_seconds(), *target, Some(*velocity))
-                + DYNAMIC_OFFSET;
+            t.translation = d.state.update(
+                time.delta_seconds(),
+                tracking_t.translation,
+                Some(*velocity),
+            ) + DYNAMIC_OFFSET;
         }
     }
 }
