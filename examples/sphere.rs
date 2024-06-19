@@ -1,28 +1,23 @@
 //! A simple dynamics example.
 
-use bevy::{
-    input::mouse::MouseMotion,
-    math::vec3,
-    prelude::*,
-    render::{
-        camera::ScalingMode,
-        render_resource::{
-            AddressMode, Extent3d, FilterMode, SamplerDescriptor, TextureDimension, TextureFormat,
-        },
-        texture::ImageSampler,
-    },
-};
+use bevy::{input::mouse::MouseMotion, prelude::*, render::camera::ScalingMode};
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugin(EguiPlugin)
-        .add_startup_system(setup)
-        .add_system(track_cursor)
-        //.add_system(track_motion)
-        .add_system(update_dynamics.after(track_cursor))
-        .add_system(dynamics_window)
+        .add_plugins(EguiPlugin)
+        .add_systems(Startup, setup)
+        .add_systems(
+            Update,
+            (
+                dynamics_window,
+                // track_motion,
+                track_cursor,
+                update_dynamics,
+            )
+                .chain(),
+        )
         .run();
 }
 
@@ -54,9 +49,9 @@ impl Dynamic {
 }
 
 // Offset the two objects so we can see the difference in motion.
-const TRACKING_POS: Vec3 = vec3(-3.0, 3.0, 0.0);
-const DYNAMIC_POS: Vec3 = vec3(3.0, 3.0, 0.0);
-const DYNAMIC_OFFSET: Vec3 = vec3(6.0, 0.0, 0.0);
+const TRACKING_POS: Vec3 = Vec3::new(-3.0, 3.0, 0.0);
+const DYNAMIC_POS: Vec3 = Vec3::new(3.0, 3.0, 0.0);
+const DYNAMIC_OFFSET: Vec3 = Vec3::new(6.0, 0.0, 0.0);
 
 fn setup(
     mut commands: Commands,
@@ -64,11 +59,11 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut images: ResMut<Assets<Image>>,
 ) {
-    // plane
-    let plane = Mesh::from(shape::Plane::from_size(80.0));
+    // Is scaling the UVs necessary anymore?
+    let plane = scale_uvs(Plane3d::default().mesh().size(80.0, 80.0).build(), 16.0);
     let grid = images.add(grid_texture());
     commands.spawn(PbrBundle {
-        mesh: meshes.add(scale_uvs(plane, 16.0)),
+        mesh: meshes.add(plane),
         material: materials.add(StandardMaterial {
             base_color_texture: Some(grid),
             perceptual_roughness: 0.3,
@@ -87,15 +82,8 @@ fn setup(
     // tracking object
     commands
         .spawn(PbrBundle {
-            mesh: meshes.add(
-                shape::Icosphere {
-                    radius: 0.8,
-                    subdivisions: 5,
-                }
-                .try_into()
-                .unwrap(),
-            ),
-            material: materials.add(Color::rgb(0.8, 0.7, 0.6).into()),
+            mesh: meshes.add(Sphere::new(0.8).mesh().ico(5).unwrap()),
+            material: materials.add(Color::rgb(0.8, 0.7, 0.6)),
             transform: Transform::from_translation(TRACKING_POS),
             ..default()
         })
@@ -107,15 +95,8 @@ fn setup(
     // dynamics object
     commands
         .spawn(PbrBundle {
-            mesh: meshes.add(
-                shape::Icosphere {
-                    radius: 1.0,
-                    subdivisions: 5,
-                }
-                .try_into()
-                .unwrap(),
-            ),
-            material: materials.add(Color::rgb(0.2, 0.7, 0.6).into()),
+            mesh: meshes.add(Sphere::new(1.0).mesh().ico(5).unwrap()),
+            material: materials.add(Color::rgb(0.2, 0.7, 0.6)),
             transform: Transform::from_translation(DYNAMIC_POS),
             ..default()
         })
@@ -141,7 +122,8 @@ fn setup(
             ..default()
         }
         .into(),
-        transform: Transform::from_xyz(0.0, 16.0, 16.0).looking_at(vec3(0.0, 3.0, 0.0), Vec3::Y),
+        transform: Transform::from_xyz(0.0, 16.0, 16.0)
+            .looking_at(Vec3::new(0.0, 3.0, 0.0), Vec3::Y),
         ..default()
     });
 }
@@ -151,14 +133,14 @@ fn setup(
 fn track_motion(
     time: Res<Time>,
     mut mouse_events: EventReader<MouseMotion>,
-    mouse_button_input: Res<Input<MouseButton>>,
+    mouse_button_input: Res<ButtonInput<MouseButton>>,
     mut query: Query<(&mut Transform, &mut Tracking)>,
 ) {
     let dt = time.delta_seconds();
     let delta = if mouse_button_input.pressed(MouseButton::Left) {
-        let d: Vec2 = mouse_events.iter().map(|m| m.delta).sum();
+        let d: Vec2 = mouse_events.read().map(|m| m.delta).sum();
         let d = d * Vec2::new(1.1, 2.0) * 0.018;
-        Some(vec3(d.x, 0.0, d.y))
+        Some(Vec3::new(d.x, 0.0, d.y))
     } else if mouse_button_input.just_released(MouseButton::Left) {
         Some(Vec3::ZERO)
     } else {
@@ -184,12 +166,12 @@ fn track_cursor(
     cameras: Query<(&Camera, &GlobalTransform)>,
     mut query: Query<(&mut Transform, &mut Tracking)>,
 ) {
-    if let Some(c) = cursor_moved.iter().last() {
+    if let Some(c) = cursor_moved.read().last() {
         for (camera, transform) in cameras.iter() {
             if let Some(p) = camera.viewport_to_world_2d(transform, c.position) {
-                let ray = Ray {
+                let ray = Ray3d {
                     origin: p.extend(transform.translation().z),
-                    direction: transform.forward(),
+                    direction: Direction3d::new(transform.forward()).unwrap(),
                 };
 
                 if let Some(p) = intersect_tracking_plane(&ray) {
@@ -212,8 +194,8 @@ fn track_cursor(
 }
 
 #[allow(unused)]
-fn intersect_tracking_plane(ray: &Ray) -> Option<Vec3> {
-    let dotn = Vec3::Y.dot(ray.direction);
+fn intersect_tracking_plane(ray: &Ray3d) -> Option<Vec3> {
+    let dotn = Vec3::Y.dot(*ray.direction);
     if dotn == 0.0 {
         None
     } else {
@@ -240,6 +222,12 @@ fn update_dynamics(
 }
 
 fn grid_texture() -> Image {
+    use bevy::render::{
+        render_asset::RenderAssetUsages,
+        render_resource::{Extent3d, TextureDimension, TextureFormat},
+        texture::{ImageAddressMode, ImageFilterMode, ImageSampler, ImageSamplerDescriptor},
+    };
+
     const GRID_SIZE: usize = 4;
     // #C3C5C9?
     let mut texture_data = [0xC3; GRID_SIZE * GRID_SIZE * 4 * 4];
@@ -265,13 +253,14 @@ fn grid_texture() -> Image {
         TextureDimension::D2,
         &texture_data,
         TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::RENDER_WORLD,
     );
-    image.sampler_descriptor = ImageSampler::Descriptor(SamplerDescriptor {
-        address_mode_u: AddressMode::Repeat,
-        address_mode_v: AddressMode::Repeat,
+    image.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
+        address_mode_u: ImageAddressMode::Repeat,
+        address_mode_v: ImageAddressMode::Repeat,
         //min_filter: FilterMode::Linear,
         //mag_filter: FilterMode::Linear,
-        mipmap_filter: FilterMode::Linear,
+        mipmap_filter: ImageFilterMode::Linear,
         ..default()
     });
     image

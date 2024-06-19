@@ -24,11 +24,11 @@
     },
     "rustify": {
       "locked": {
-        "lastModified": 1682974306,
-        "narHash": "sha256-xNcXUOe9eR4ZUKEzyf+Do/BVqYGn4jnvNstHdMO6HYY=",
+        "lastModified": 1718760831,
+        "narHash": "sha256-XM5O6O5Fpw7GHjHpK4eFN/JIdxxXSMQkQG2v8rva3SM=",
         "owner": "yrns",
         "repo": "rustify",
-        "rev": "dd2a91d9a978e436cfc7affdcf29414a1bd3ae87",
+        "rev": "83016bc1e10496ddd0c24699184d44c7c3fd3870",
         "type": "github"
       },
       "original": {
