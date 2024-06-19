@@ -1,7 +1,25 @@
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
 
-use crate::Dynamic;
+/// Remember the parameters so we can update them in real time.
+#[derive(Component, Debug)]
+pub struct Dynamics {
+    pub f: f32,
+    pub z: f32,
+    pub r: f32,
+    pub state: pair::SecondOrderDynamics<Vec3>,
+}
+
+impl Dynamics {
+    pub fn new(f: f32, z: f32, r: f32, t: Vec3) -> Self {
+        Self {
+            f,
+            z,
+            r,
+            state: pair::SecondOrderDynamics::new(f, z, r, t),
+        }
+    }
+}
 
 pub struct Plugin;
 
@@ -13,7 +31,10 @@ impl bevy::app::Plugin for Plugin {
     }
 }
 
-pub fn update_dynamics(mut contexts: EguiContexts, mut dynamics: Query<(DebugName, &mut Dynamic)>) {
+pub fn update_dynamics(
+    mut contexts: EguiContexts,
+    mut dynamics: Query<(DebugName, &mut Dynamics)>,
+) {
     for (name, mut dynamic) in dynamics.iter_mut() {
         egui::Window::new(format!("{:?}", name)).show(contexts.ctx_mut(), |ui| {
             let response = ui
@@ -22,7 +43,7 @@ pub fn update_dynamics(mut contexts: EguiContexts, mut dynamics: Query<(DebugNam
                 | ui.add(egui::Slider::new(&mut dynamic.r, -10.0..=10.0).text("r (response)"));
 
             if response.changed() {
-                *dynamic = Dynamic::new(dynamic.f, dynamic.z, dynamic.r);
+                *dynamic = Dynamics::new(dynamic.f, dynamic.z, dynamic.r, dynamic.state.y);
             }
         });
     }
@@ -61,7 +82,7 @@ pub fn common_scene(
             shadows_enabled: true,
             ..default()
         },
-        transform: Transform::from_xyz(-10.0, 20.0, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
+        transform: Transform::from_xyz(-10.0, 20.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
         ..default()
     });
 }

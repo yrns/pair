@@ -6,7 +6,7 @@ pub struct SecondOrderDynamics<T> {
     // Previous input.
     xp: T,
     // State variables.
-    y: T,
+    pub y: T,
     yd: T,
     // Computed constants.
     w: f32,

@@ -4,6 +4,8 @@ mod common;
 
 use bevy::{input::mouse::MouseMotion, prelude::*, render::camera::ScalingMode};
 
+use common::Dynamics;
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
@@ -14,7 +16,7 @@ fn main() {
             (
                 // track_motion,
                 track_cursor,
-                update_dynamics,
+                update_dynamic,
             )
                 .chain(),
         )
@@ -28,26 +30,6 @@ struct Tracking;
 /// Velocity component.
 #[derive(Component, Default)]
 struct Velocity(Vec3);
-
-/// Remember the parameters so we can update them in real time.
-#[derive(Component)]
-struct Dynamic {
-    f: f32,
-    z: f32,
-    r: f32,
-    state: pair::SecondOrderDynamics<Vec3>,
-}
-
-impl Dynamic {
-    pub fn new(f: f32, z: f32, r: f32) -> Self {
-        Self {
-            f,
-            z,
-            r,
-            state: pair::SecondOrderDynamics::new(f, z, r, TRACKING_POS),
-        }
-    }
-}
 
 // Offset the two objects so we can see the difference in motion.
 const TRACKING_POS: Vec3 = Vec3::new(-3.0, 3.0, 0.0);
@@ -79,7 +61,7 @@ fn setup(
             ..default()
         },
         // The dynamics are tracking the tracker internally. The offset is added post-update.
-        Dynamic::new(2.5, 1.0, 1.0),
+        Dynamics::new(2.5, 1.0, 1.0, DYNAMIC_POS),
     ));
 
     // camera
@@ -170,10 +152,10 @@ fn intersect_tracking_plane(ray: &Ray3d) -> Option<Vec3> {
 }
 
 /// Update dynamics object based on the tracking object's position and velocity.
-fn update_dynamics(
+fn update_dynamic(
     time: Res<Time>,
     tracking: Query<(&Transform, &Velocity), With<Tracking>>,
-    mut dynamic: Query<(&mut Transform, &mut Dynamic), Without<Tracking>>,
+    mut dynamic: Query<(&mut Transform, &mut Dynamics), Without<Tracking>>,
 ) {
     // In this example there is only one.
     if let Some((t0, v)) = tracking.iter().next() {
