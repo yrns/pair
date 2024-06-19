@@ -22,10 +22,12 @@ fn main() {
 }
 
 /// A marker component for the tracking object.
+#[derive(Component)]
+struct Tracking;
+
+/// Velocity component.
 #[derive(Component, Default)]
-struct Tracking {
-    velocity: Vec3,
-}
+struct Velocity(Vec3);
 
 /// Remember the parameters so we can update them in real time.
 #[derive(Component)]
@@ -58,7 +60,7 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut images: ResMut<Assets<Image>>,
 ) {
-    // Is scaling the UVs necessary anymore?
+    // ground plane grid
     let plane = scale_uvs(Plane3d::default().mesh().size(80.0, 80.0).build(), 16.0);
     let grid = images.add(grid_texture());
     commands.spawn(PbrBundle {
@@ -86,18 +88,20 @@ fn setup(
             transform: Transform::from_translation(TRACKING_POS),
             ..default()
         })
-        .insert(Tracking::default());
+        .insert((Tracking, Velocity::default()));
 
     // dynamics object
-    commands
-        .spawn(PbrBundle {
+    commands.spawn((
+        Name::new("Dynamics settings"),
+        PbrBundle {
             mesh: meshes.add(Sphere::new(1.0).mesh().ico(5).unwrap()),
             material: materials.add(Color::rgb(0.2, 0.7, 0.6)),
             transform: Transform::from_translation(DYNAMIC_POS),
             ..default()
-        })
+        },
         // The dynamics are tracking the tracker internally. The offset is added post-update.
-        .insert(Dynamic::new(2.5, 1.0, 1.0));
+        Dynamic::new(2.5, 1.0, 1.0),
+    ));
 
     // light
     commands.spawn(DirectionalLightBundle {
@@ -130,7 +134,7 @@ fn track_motion(
     time: Res<Time>,
     mut mouse_events: EventReader<MouseMotion>,
     mouse_button_input: Res<ButtonInput<MouseButton>>,
-    mut query: Query<(&mut Transform, &mut Tracking)>,
+    mut query: Query<(&mut Transform, &mut Velocity), With<Tracking>>,
 ) {
     let dt = time.delta_seconds();
     let delta = if mouse_button_input.pressed(MouseButton::Left) {
@@ -144,10 +148,10 @@ fn track_motion(
     };
 
     if let Some(d) = delta {
-        for (mut t, mut tracking) in query.iter_mut() {
+        for (mut t, mut v) in query.iter_mut() {
             // Save target/velocity.
             let target = t.translation + d;
-            tracking.velocity = if dt > 0.0 { d / dt } else { Vec3::ZERO };
+            v.0 = if dt > 0.0 { d / dt } else { Vec3::ZERO };
             t.translation = target;
         }
     };
@@ -159,9 +163,11 @@ fn track_cursor(
     time: Res<Time>,
     mut cursor_moved: EventReader<CursorMoved>,
     cameras: Query<(&Camera, &GlobalTransform)>,
-    mut query: Query<(&mut Transform, &mut Tracking)>,
+    mut query: Query<(&mut Transform, &mut Velocity), With<Tracking>>,
 ) {
     if let Some(c) = cursor_moved.read().last() {
+        let dt = time.delta_seconds();
+
         for (camera, transform) in cameras.iter() {
             if let Some(p) = camera.viewport_to_world_2d(transform, c.position) {
                 let ray = Ray3d {
@@ -170,13 +176,10 @@ fn track_cursor(
                 };
 
                 if let Some(p) = intersect_tracking_plane(&ray) {
-                    for (mut t, mut tracking) in query.iter_mut() {
-                        let dt = time.delta_seconds();
-                        tracking.velocity = if dt > 0.0 {
-                            (p - t.translation) / dt
-                        } else {
-                            Vec3::ZERO
-                        };
+                    for (mut t, mut v) in query.iter_mut() {
+                        if dt != 0.0 {
+                            v.0 = (p - t.translation) / dt;
+                        }
                         t.translation = p;
                     }
                 }
@@ -201,17 +204,16 @@ fn intersect_tracking_plane(ray: &Ray3d) -> Option<Vec3> {
 /// Update dynamics object based on the tracking object's position and velocity.
 fn update_dynamics(
     time: Res<Time>,
-    tracking: Query<(&Transform, &Tracking)>,
+    tracking: Query<(&Transform, &Velocity), With<Tracking>>,
     mut dynamic: Query<(&mut Transform, &mut Dynamic), Without<Tracking>>,
 ) {
     // In this example there is only one.
-    if let Some((tracking_t, Tracking { velocity })) = tracking.iter().next() {
+    if let Some((t0, v)) = tracking.iter().next() {
         for (mut t, mut d) in dynamic.iter_mut() {
-            t.translation = d.state.update(
-                time.delta_seconds(),
-                tracking_t.translation,
-                Some(*velocity),
-            ) + DYNAMIC_OFFSET;
+            t.translation = d
+                .state
+                .update(time.delta_seconds(), t0.translation, Some(v.0))
+                + DYNAMIC_OFFSET;
         }
     }
 }
@@ -274,9 +276,9 @@ fn scale_uvs(mut mesh: Mesh, scale: f32) -> Mesh {
     mesh
 }
 
-fn dynamics_window(mut contexts: EguiContexts, mut dynamics: Query<(Entity, &mut Dynamic)>) {
-    for (entity, mut dynamic) in dynamics.iter_mut() {
-        egui::Window::new(format!("dynamic {:?}", entity)).show(contexts.ctx_mut(), |ui| {
+fn dynamics_window(mut contexts: EguiContexts, mut dynamics: Query<(DebugName, &mut Dynamic)>) {
+    for (name, mut dynamic) in dynamics.iter_mut() {
+        egui::Window::new(format!("{:?}", name)).show(contexts.ctx_mut(), |ui| {
             let response = ui
                 .add(egui::Slider::new(&mut dynamic.f, 0.0..=10.0).text("f (frequency)"))
                 | ui.add(egui::Slider::new(&mut dynamic.z, 0.0..=10.0).text("ζ (damping)"))
